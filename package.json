@@ -1,0 +1,26 @@
+{
+  "name": "react-express-sql-template",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"cd frontend && vite\" \"nodemon server.js\"",
+    "build": "cd frontend && vite build",
+    "preview": "cd frontend && vite preview",
+    "start": "cross-env NODE_ENV=production node server.js"
+  },
+  "dependencies": {
+    "ejs": "^3.1.9",
+    "express": "^4.18.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.14.1",
+    "sequelize": "^6.37.8",
+    "sqlite3": "^5.1.6"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "concurrently": "^8.2.1",
+    "cross-env": "^7.0.3",
+    "nodemon": "^3.0.1",
+    "vite": "^5.4.1"
+  }
+}
