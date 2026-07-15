@@ -38,7 +38,7 @@ export default function Home() {
       assistantKnowledge.find((entry) => entry.keywords.some((keyword) => normalized.includes(keyword))) ||
       {
         answer:
-          'Use the Tenant Journey for stage-specific guidance, the Resources hub for manuals and documents, and Contact Us if you need a CDL team follow-up.',
+          'Use the 13-stage Tenant Journey for stage-specific guidance, the Resources hub for manuals and documents, and Contact Us if you need a team follow-up.',
         links: ['/journey', '/resources', '/contact'],
       }
     );
@@ -49,10 +49,10 @@ export default function Home() {
       <section className="hero-panel">
         <div className="hero-copy">
           <p className="eyebrow">Welcome to the Company</p>
-          <h2>Interactive tenant collaboration for every stage of the leasing process.</h2>
+          <h2>Interactive tenant collaboration across a 13-stage leasing and fit-out journey.</h2>
           <p className="lead">{companyProfile.overview}</p>
           <div className="button-row">
-            <Link className="button-link" to="/journey">Start Your Tenant Journey</Link>
+            <Link className="button-link" to="/journey">Open Tenant Journey & Fit-Out</Link>
             <Link className="button-link button-link-secondary" to="/resources">Open Resources Hub</Link>
           </div>
         </div>
@@ -92,7 +92,7 @@ export default function Home() {
             <div className="section-heading">
               <div>
                 <p className="eyebrow">Quick Navigation</p>
-                <h3>Direct access to the most-used tenant resources.</h3>
+                <h3>Direct access to the 13-stage journey and supporting resources.</h3>
               </div>
             </div>
             <div className="feature-grid home-feature-grid">

@@ -20,7 +20,7 @@ export default function Contacts() {
       <div className="section-heading">
         <div>
           <p className="eyebrow">Contact Us</p>
-          <h2>Connect with the right CDL team for the next action.</h2>
+          <h2>Connect with the right team for the next action.</h2>
         </div>
       </div>
       <div className="filter-row">
@@ -53,7 +53,7 @@ export default function Contacts() {
         </ul>
       )}
 
-      <p className="feedback">A CDL staff member can respond to portal enquiries within 3 working days, depending on submission completeness.</p>
+      <p className="feedback">A portal staff member can respond to enquiries within 3 working days, depending on submission completeness.</p>
     </section>
   );
 }

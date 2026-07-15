@@ -35,9 +35,11 @@ export default function FormsDownloads() {
       <div className="section-heading">
         <div>
           <p className="eyebrow">Downloads & Resources</p>
-          <h2>Central repository for forms, standards, templates, and references.</h2>
+          <h2>Central repository for forms, standards, templates, and 13-stage journey references.</h2>
         </div>
       </div>
+
+      <p className="feedback">Use stage names like Landlord Submission, Contractor Onboarding, or Pre-Opening Handover to narrow the document list.</p>
 
       <div className="toolbar-row">
         <div className="search-bar grow">
@@ -69,7 +71,7 @@ export default function FormsDownloads() {
               <p>{d.description || 'Download the document.'}</p>
               <div className="resource-meta">
                 <span>{d.type || 'Reference'}</span>
-                <span>{d.stage || 'All stages'}</span>
+                <span>{d.stage || 'Across all 13 stages'}</span>
               </div>
               <p className="muted">Access method: {d.access || 'Portal document register'}</p>
             </article>

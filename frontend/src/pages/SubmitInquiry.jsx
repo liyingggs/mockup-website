@@ -28,7 +28,7 @@ export default function SubmitInquiry() {
       body: JSON.stringify({ name: contactPerson, email, subject, message: payloadMessage }),
     });
     if (res.ok) {
-      setStatus('Submitted. A CDL staff member will follow up within 3 working days.');
+      setStatus('Submitted. A portal staff member will follow up within 3 working days.');
       setCompanyName('');
       setContactPerson('');
       setEmail('');
@@ -66,9 +66,7 @@ export default function SubmitInquiry() {
           Business Type
           <select value={businessType} onChange={(e) => setBusinessType(e.target.value)}>
             <option>Retail</option>
-            <option>Food & Beverage</option>
-            <option>Shopfront Specialty</option>
-            <option>Flexible Workplace</option>
+            <option>Office</option>
           </select>
         </label>
         <label>

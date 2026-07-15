@@ -1,32 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import ManualJourneyExplorer from '../components/ManualJourneyExplorer';
 import {
 	appendices,
 	documentResources,
-	fallbackFaqs,
 	journeyStages,
-	manualChapters,
 } from '../data/portalContent';
 
-const suggestedSearches = ['design submission', 'green lease', 'construction permits', 'technical standards'];
+const suggestedSearches = ['concept briefing', 'landlord submission', 'contractor onboarding', 'pre-opening handover'];
 
 export default function Resources() {
-	const [query, setQuery] = useState('design submission');
+	const [query, setQuery] = useState('landlord submission');
 	const [docs, setDocs] = useState(documentResources);
 	const [docsLoading, setDocsLoading] = useState(true);
 	const [resourceFilter, setResourceFilter] = useState('All');
 	const [resourceView, setResourceView] = useState('downloads');
-	const [manualSearch, setManualSearch] = useState('');
-	const [selectedChapter, setSelectedChapter] = useState(manualChapters[0].id);
-	const [bookmarks, setBookmarks] = useState(() => {
-		try {
-			return JSON.parse(localStorage.getItem('cdl-manual-bookmarks') || '[]');
-		} catch {
-			return [];
-		}
-	});
 	const [recentSearches, setRecentSearches] = useState(() => {
 		try {
-			return JSON.parse(localStorage.getItem('cdl-recent-searches') || '[]');
+			return JSON.parse(localStorage.getItem('portal-recent-searches') || '[]');
 		} catch {
 			return [];
 		}
@@ -38,20 +28,14 @@ export default function Resources() {
 			...journeyStages.map((stage) => ({
 				id: stage.id,
 				type: 'Journey Stage',
-				title: stage.title,
-				body: `${stage.overview} ${stage.requirements.join(' ')}`,
+				title: `${stage.tenancyLabel}: ${stage.title}`,
+				body: `${stage.tenancyLabel} ${stage.overview} ${stage.requirements.join(' ')}`,
 			})),
 			...docs.map((document) => ({
 				id: document.id,
 				type: 'Resource',
 				title: document.name,
 				body: `${document.description} ${document.category} ${document.stage}`,
-			})),
-			...fallbackFaqs.map((faq) => ({
-				id: faq.id,
-				type: 'FAQ',
-				title: faq.question,
-				body: `${faq.answer} ${faq.category}`,
 			})),
 		];
 
@@ -78,7 +62,7 @@ export default function Resources() {
 
 		const next = [query, ...recentSearches.filter((item) => item !== query)].slice(0, 5);
 		setRecentSearches(next);
-		localStorage.setItem('cdl-recent-searches', JSON.stringify(next));
+		localStorage.setItem('portal-recent-searches', JSON.stringify(next));
 	};
 
 	const categories = useMemo(() => ['All', ...new Set(docs.map((doc) => doc.category || 'General'))], [docs]);
@@ -90,48 +74,22 @@ export default function Resources() {
 		});
 	}, [docs, query, resourceFilter]);
 
-	const filteredChapters = useMemo(() => {
-		const normalized = manualSearch.toLowerCase();
-		return manualChapters.filter((chapter) => {
-			if (!normalized) {
-				return true;
-			}
-
-			return (
-				chapter.title.toLowerCase().includes(normalized) ||
-				chapter.summary.toLowerCase().includes(normalized) ||
-				chapter.sections.some((section) => section.toLowerCase().includes(normalized))
-			);
-		});
-	}, [manualSearch]);
-
-	const activeChapter = manualChapters.find((chapter) => chapter.id === selectedChapter) || manualChapters[0];
-	const activeChapterIndex = manualChapters.findIndex((chapter) => chapter.id === activeChapter.id);
-
-	const toggleBookmark = (chapterId) => {
-		const nextBookmarks = bookmarks.includes(chapterId)
-			? bookmarks.filter((item) => item !== chapterId)
-			: [...bookmarks, chapterId];
-
-		setBookmarks(nextBookmarks);
-		localStorage.setItem('cdl-manual-bookmarks', JSON.stringify(nextBookmarks));
-	};
-
 	return (
 		<div className="page-stack">
 			<section className="panel">
 				<div className="section-heading">
 					<div>
 						<p className="eyebrow">Resources</p>
-						<h2>Search, downloads, references, and appendices in one place.</h2>
+						<h2>Search, stage references, downloads, and appendices in one place.</h2>
 					</div>
 				</div>
+				<p className="feedback">Search by stage name, tenancy type, document type, or approval topic across the full 13-stage Retail and Office journeys.</p>
 				<div className="toolbar-row">
 					<div className="search-bar grow">
 						<input
 							value={query}
 							onChange={(event) => setQuery(event.target.value)}
-							placeholder="Search forms, templates, standards, appendices, and portal guidance"
+							placeholder="Search stage names, forms, templates, standards, appendices, and portal guidance"
 						/>
 					</div>
 					<label className="filter-control">
@@ -203,7 +161,7 @@ export default function Resources() {
 												<p>{doc.description || 'Download the document.'}</p>
 												<div className="resource-meta">
 													<span>{doc.type || 'Reference'}</span>
-													<span>{doc.stage || 'All stages'}</span>
+													<span>{doc.stage || 'Across all 13 stages'}</span>
 												</div>
 												<p className="muted">Access method: {doc.access || 'Portal document register'}</p>
 											</article>
@@ -248,83 +206,14 @@ export default function Resources() {
 				<div className="section-heading">
 					<div>
 						<p className="eyebrow">Digital Tenancy Manual</p>
-						<h3>Searchable online manual with chapter navigation and bookmarks.</h3>
+						<h3>Searchable online manual aligned to the 13-stage tenant journey.</h3>
 					</div>
 					<div className="button-row small-gap">
 						<button type="button" className="button-link" onClick={() => window.print()}>Print / Save as PDF</button>
 					</div>
 				</div>
 
-				<div className="manual-layout">
-					<aside className="manual-sidebar">
-						<div className="search-bar">
-							<input
-								value={manualSearch}
-								placeholder="Search manual chapters and topics"
-								onChange={(event) => setManualSearch(event.target.value)}
-							/>
-						</div>
-						<div className="manual-meta">
-							<p><strong>Bookmarks:</strong> {bookmarks.length}</p>
-							<p><strong>Chapters:</strong> {manualChapters.length}</p>
-						</div>
-						<div className="manual-toc">
-							{filteredChapters.map((chapter) => (
-								<button
-									key={chapter.id}
-									type="button"
-									className={activeChapter.id === chapter.id ? 'manual-link active' : 'manual-link'}
-									onClick={() => setSelectedChapter(chapter.id)}
-								>
-									<span>{chapter.title}</span>
-									{bookmarks.includes(chapter.id) ? <strong>Saved</strong> : null}
-								</button>
-							))}
-						</div>
-					</aside>
-
-					<div className="manual-content">
-						<div className="manual-header-card">
-							<div>
-								<p className="eyebrow">Chapter Navigation</p>
-								<h3>{activeChapter.title}</h3>
-								<p>{activeChapter.summary}</p>
-							</div>
-							<button type="button" className="chip-button" onClick={() => toggleBookmark(activeChapter.id)}>
-								{bookmarks.includes(activeChapter.id) ? 'Remove Bookmark' : 'Bookmark Page'}
-							</button>
-						</div>
-
-						<div className="interactive-tabs">
-							<div className="tab-panel manual-panel">
-								<h4>Included Topics</h4>
-								<ul className="bullet-list">
-									{activeChapter.sections.map((section) => (
-										<li key={section}>{section}</li>
-									))}
-								</ul>
-								<div className="button-row small-gap">
-									<button
-										type="button"
-										className="button-link button-link-secondary"
-										onClick={() => setSelectedChapter(manualChapters[Math.max(activeChapterIndex - 1, 0)].id)}
-										disabled={activeChapterIndex === 0}
-									>
-										Previous Chapter
-									</button>
-									<button
-										type="button"
-										className="button-link"
-										onClick={() => setSelectedChapter(manualChapters[Math.min(activeChapterIndex + 1, manualChapters.length - 1)].id)}
-										disabled={activeChapterIndex === manualChapters.length - 1}
-									>
-										Next Chapter
-									</button>
-								</div>
-							</div>
-						</div>
-					</div>
-				</div>
+				<ManualJourneyExplorer />
 			</section>
 
 		</div>
