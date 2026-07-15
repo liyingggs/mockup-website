@@ -11,6 +11,7 @@ export default function SubmitInquiry() {
   const [status, setStatus] = useState(null);
   const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [usedFallback, setUsedFallback] = useState(false);
 
   const resetForm = () => {
     setCompanyName('');
@@ -24,6 +25,7 @@ export default function SubmitInquiry() {
   const submit = async (e) => {
     e.preventDefault();
     setStatus(null);
+    setUsedFallback(false);
     setIsSubmitting(true);
     const subject = `${companyName} | ${businessType} | ${preferredPremises}`;
     const payloadMessage = [
@@ -36,11 +38,17 @@ export default function SubmitInquiry() {
     ].join('\n');
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
       const res = await fetch('/api/inquiries', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: contactPerson, email, subject, message: payloadMessage }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (!res.ok) {
         let errMsg = 'Submission failed. Please try again.';
@@ -59,12 +67,29 @@ export default function SubmitInquiry() {
       setSubmitted(true);
       setStatus(null);
     } catch (error) {
-      setSubmitted(false);
-      setStatus(error?.message || 'Unable to submit enquiry right now. Please use the contact form again shortly.');
+      // GitHub Pages is static and cannot reach /api/inquiries.
+      // Fall back to a clear completion state plus email action.
+      setSubmitted(true);
+      setUsedFallback(true);
+      setStatus(error?.message || 'Unable to submit to server right now.');
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  const mailtoLink = `mailto:leasing@tenant-portal.example?subject=${encodeURIComponent(
+    `${companyName || 'New enquiry'} | ${businessType} | ${preferredPremises}`
+  )}&body=${encodeURIComponent(
+    [
+      `Company Name: ${companyName}`,
+      `Contact Person: ${contactPerson}`,
+      `Email: ${email}`,
+      `Business Type: ${businessType}`,
+      `Preferred Premises: ${preferredPremises}`,
+      '',
+      message,
+    ].join('\n')
+  )}`;
 
   if (submitted) {
     return (
@@ -72,8 +97,13 @@ export default function SubmitInquiry() {
         <div className="section-heading">
           <div>
             <p className="eyebrow">Submission Complete</p>
-            <h2>Your enquiry has been submitted successfully.</h2>
-            <p className="lead">A portal staff member will follow up within 3 working days.</p>
+            <h2>{usedFallback ? 'Your enquiry details are ready.' : 'Your enquiry has been submitted successfully.'}</h2>
+            <p className="lead">
+              {usedFallback
+                ? 'This hosted demo cannot post directly to the backend. Use the email button below to send your enquiry now.'
+                : 'A portal staff member will follow up within 3 working days.'}
+            </p>
+            {usedFallback && status ? <p className="feedback">{status}</p> : null}
           </div>
         </div>
         <div className="button-row">
@@ -87,6 +117,9 @@ export default function SubmitInquiry() {
           >
             Submit Another Enquiry
           </button>
+          {usedFallback ? (
+            <a className="button-link" href={mailtoLink}>Send Via Email</a>
+          ) : null}
           <Link className="button-link button-link-secondary" to="/journey">
             Back to Tenant Journey
           </Link>
