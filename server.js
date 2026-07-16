@@ -14,6 +14,7 @@ app.set('views', path.join(__dirname, 'frontend', 'views'));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, 'frontend', 'public')));
 
 app.get('/api/users', async (req, res) => {
   const users = await User.findAll();
