@@ -7,6 +7,8 @@ import {
 	journeyStages,
 } from '../data/portalContent';
 
+const manualPdfHref = `${import.meta.env.BASE_URL}manual.pdf`;
+
 const shortenText = (text = '') => {
 	const compact = text.replace(/\s+/g, ' ').trim();
 	if (compact.length <= 110) {
@@ -239,7 +241,7 @@ export default function Resources() {
 							</p>
 							</div>
 							<a
-							href="/manual.pdf"
+							href={manualPdfHref}
 							download="Digital-Tenancy-Manual.pdf"
 							className="download-manual-btn">
 								<svg className="download-btn-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">

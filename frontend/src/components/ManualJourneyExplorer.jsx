@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { manualChapters } from '../data/portalContent';
 
+const manualPdfHref = `${import.meta.env.BASE_URL}manual.pdf`;
+
 export default function ManualJourneyExplorer() {
   const [selectedChapterId, setSelectedChapterId] = useState(manualChapters[0].id);
   const [search, setSearch] = useState('');
@@ -80,7 +82,7 @@ export default function ManualJourneyExplorer() {
                 </span>
               </button>
               <a
-                href="/manual.pdf"
+                href={manualPdfHref}
                 download="Digital-Tenancy-Manual.pdf"
                 className="manual-mini-download"
                 title="Download manual PDF"
