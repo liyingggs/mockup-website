@@ -29,8 +29,12 @@ export default function ManualJourneyExplorer() {
     });
   }, [search]);
 
-  const activeChapter = manualChapters.find((chapter) => chapter.id === selectedChapterId) || manualChapters[0];
-  const activeChapterIndex = manualChapters.findIndex((chapter) => chapter.id === activeChapter.id);
+  const activeChapter = filteredChapters.find((chapter) => chapter.id === selectedChapterId)
+    || filteredChapters[0]
+    || null;
+  const activeChapterIndex = activeChapter
+    ? manualChapters.findIndex((chapter) => chapter.id === activeChapter.id)
+    : -1;
 
   const toggleBookmark = (chapterId) => {
     const nextBookmarks = bookmarks.includes(chapterId)
@@ -60,23 +64,40 @@ export default function ManualJourneyExplorer() {
 
         <div className="manual-stage-list">
           {filteredChapters.map((chapter) => (
-            <button
+            <article
               key={chapter.id}
-              type="button"
-              className={activeChapter.id === chapter.id ? 'manual-stage-button active' : 'manual-stage-button'}
-              onClick={() => setSelectedChapterId(chapter.id)}
+              className={activeChapter.id === chapter.id ? 'manual-stage-item active' : 'manual-stage-item'}
             >
-              <span className="manual-stage-number">{chapter.number}</span>
-              <span className="manual-stage-copy">
-                <strong>{chapter.shortTitle}</strong>
-                <small>{chapter.phase}</small>
-              </span>
-            </button>
+              <button
+                type="button"
+                className={activeChapter.id === chapter.id ? 'manual-stage-button active' : 'manual-stage-button'}
+                onClick={() => setSelectedChapterId(chapter.id)}
+              >
+                <span className="manual-stage-number">{chapter.number}</span>
+                <span className="manual-stage-copy">
+                  <strong>{chapter.shortTitle}</strong>
+                  <small>{chapter.phase}</small>
+                </span>
+              </button>
+              <a
+                href="/manual.pdf"
+                download="Digital-Tenancy-Manual.pdf"
+                className="manual-mini-download"
+                title="Download manual PDF"
+                aria-label={`Download manual PDF from chapter ${chapter.number}`}
+              >
+                <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                  <path d="M8 2v7m0 0 3-3m-3 3-3-3M3 12h10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </a>
+            </article>
           ))}
         </div>
       </section>
 
       <section className="manual-detail-panel">
+        {activeChapter ? (
+          <>
         <div className="manual-detail-header">
           <div>
             <p className="eyebrow">Chapter Navigation</p>
@@ -143,6 +164,13 @@ export default function ManualJourneyExplorer() {
             Next Chapter
           </button>
         </div>
+          </>
+        ) : (
+          <div className="resources-empty-state">
+            <p className="empty-state">No chapters match this search.</p>
+            <button type="button" className="button-link" onClick={() => setSearch('')}>Clear Search</button>
+          </div>
+        )}
       </section>
     </div>
   );

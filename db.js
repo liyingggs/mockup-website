@@ -46,6 +46,13 @@ const FAQ = sequelize.define('FAQ', {
   answer: { type: DataTypes.TEXT },
 });
 
+const ChatbotKnowledge = sequelize.define('ChatbotKnowledge', {
+  topic: { type: DataTypes.STRING, allowNull: false },
+  keywords: { type: DataTypes.TEXT, allowNull: false },
+  answer: { type: DataTypes.TEXT, allowNull: false },
+  priority: { type: DataTypes.INTEGER, defaultValue: 1 },
+});
+
 const Inquiry = sequelize.define('Inquiry', {
   name: { type: DataTypes.STRING },
   email: { type: DataTypes.STRING },
@@ -66,6 +73,7 @@ module.exports = {
   Document,
   Contact,
   FAQ,
+  ChatbotKnowledge,
   Inquiry,
   LeasingInfo,
 };

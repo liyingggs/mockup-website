@@ -1,63 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { assistantKnowledge, journeyStages, manualChapters } from '../data/portalContent';
-
-function getReply(query) {
-  const normalized = query.trim().toLowerCase();
-
-  if (!normalized) {
-    return {
-      text: 'Ask about any stage, chapter, submission, or document and I will try to help.',
-      canHelp: true,
-    };
-  }
-
-  const knowledgeMatch = assistantKnowledge.find((entry) => (
-    entry.keywords.some((keyword) => normalized.includes(keyword))
-  ));
-
-  if (knowledgeMatch) {
-    return {
-      text: knowledgeMatch.answer,
-      canHelp: true,
-    };
-  }
-
-  const journeyMatch = journeyStages.find((stage) => (
-    normalized.includes(stage.title.toLowerCase()) ||
-    normalized.includes(stage.phase.toLowerCase()) ||
-    normalized.includes(stage.tenancyLabel.toLowerCase())
-  ));
-
-  if (journeyMatch) {
-    return {
-      text: `${journeyMatch.tenancyLabel} ${journeyMatch.number} ${journeyMatch.title}: ${journeyMatch.overview} Key actions include ${journeyMatch.actions.slice(0, 2).join(' and ')}.`,
-      canHelp: true,
-    };
-  }
-
-  const manualMatch = manualChapters.find((chapter) => (
-    normalized.includes(chapter.shortTitle.toLowerCase()) ||
-    normalized.includes(chapter.title.toLowerCase()) ||
-    chapter.sections.some((section) => normalized.includes(section.toLowerCase()))
-  ));
-
-  if (manualMatch) {
-    return {
-      text: `${manualMatch.title}: ${manualMatch.summary} Key topics include ${manualMatch.sections.slice(0, 2).join(' and ')}.`,
-      canHelp: true,
-    };
-  }
-
-  return {
-    text: 'I cannot help with that confidently. Please use the contact form so the team can follow up properly.',
-    canHelp: false,
-  };
-}
 
 export default function FloatingChatbot() {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState([
     {
       id: 'welcome',
@@ -73,21 +20,49 @@ export default function FloatingChatbot() {
     'Show me concept briefing topics',
   ], []);
 
-  const sendMessage = (value) => {
+  const sendMessage = async (value) => {
     const nextValue = value.trim();
 
     if (!nextValue) {
       return;
     }
 
-    const reply = getReply(nextValue);
-
     setMessages((current) => ([
       ...current,
       { id: `user-${Date.now()}`, role: 'user', text: nextValue },
-      { id: `assistant-${Date.now() + 1}`, role: 'assistant', text: reply.text, canHelp: reply.canHelp },
     ]));
     setInput('');
+
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/chatbot/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: nextValue }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Unable to fetch chatbot response');
+      }
+
+      const reply = await response.json();
+      setMessages((current) => ([
+        ...current,
+        { id: `assistant-${Date.now() + 1}`, role: 'assistant', text: reply.text, canHelp: reply.canHelp },
+      ]));
+    } catch (error) {
+      setMessages((current) => ([
+        ...current,
+        {
+          id: `assistant-${Date.now() + 1}`,
+          role: 'assistant',
+          text: 'I could not reach the chatbot service right now. Please try again shortly.',
+          canHelp: false,
+        },
+      ]));
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -111,6 +86,11 @@ export default function FloatingChatbot() {
                 ) : null}
               </div>
             ))}
+            {isLoading ? (
+              <div className="chatbot-message assistant">
+                <p>Checking the knowledge base...</p>
+              </div>
+            ) : null}
           </div>
 
           <div className="chip-row compact-chip-row chatbot-suggestions">
@@ -139,7 +119,12 @@ export default function FloatingChatbot() {
       ) : null}
 
       <button type="button" className="chatbot-fab" onClick={() => setIsOpen((current) => !current)} aria-label="Open AI chatbot">
-        AI
+        <svg viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+          <path
+            fill="currentColor"
+            d="M12 3C6.47 3 2 6.58 2 11c0 2.39 1.33 4.52 3.42 5.98V21l3.26-1.95c1.08.3 2.22.45 3.32.45 5.53 0 10-3.58 10-8s-4.47-8-10-8Zm0 14.5c-1.01 0-2.08-.16-3.07-.48l-.74-.24-1.77 1.06v-2.04l-.52-.35C4.12 14.25 3 12.68 3 11c0-3.83 4.03-7 9-7s9 3.17 9 7-4.03 7-9 7Zm-4-7.25a1 1 0 1 0 0 2 1 1 0 0 0 0-2Zm4 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2Zm4 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"
+          />
+        </svg>
       </button>
     </div>
   );

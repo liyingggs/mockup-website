@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import ManualJourneyExplorer from '../components/ManualJourneyExplorer';
 import {
 	appendices,
@@ -6,21 +7,60 @@ import {
 	journeyStages,
 } from '../data/portalContent';
 
-const suggestedSearches = ['concept briefing', 'landlord submission', 'contractor onboarding', 'pre-opening handover'];
+const shortenText = (text = '') => {
+	const compact = text.replace(/\s+/g, ' ').trim();
+	if (compact.length <= 110) {
+		return compact;
+	}
+	return `${compact.slice(0, 107)}...`;
+};
+
+const readNextActionStageNumber = () => {
+	try {
+		const saved = JSON.parse(localStorage.getItem('portal-workspace-status') || 'null');
+		const match = saved?.currentStage?.match(/stage\s+(\d+)/i);
+		if (!match) {
+			return 1;
+		}
+
+		const currentStage = Number(match[1]);
+		if (Number.isNaN(currentStage) || currentStage <= 0) {
+			return 1;
+		}
+
+		return Math.min(currentStage + 1, 13);
+	} catch {
+		return 1;
+	}
+};
+
+const isDocumentRelevantToStage = (stageText, targetStageNumber) => {
+	if (!stageText) {
+		return false;
+	}
+
+	if (/across all/i.test(stageText)) {
+		return true;
+	}
+
+	const matches = stageText.match(/\d+/g);
+	if (!matches) {
+		return false;
+	}
+
+	const numericStages = matches.map((value) => Number(value)).filter((value) => !Number.isNaN(value));
+	return numericStages.includes(targetStageNumber);
+};
 
 export default function Resources() {
-	const [query, setQuery] = useState('landlord submission');
+	const [query, setQuery] = useState('');
 	const [docs, setDocs] = useState(documentResources);
 	const [docsLoading, setDocsLoading] = useState(true);
 	const [resourceFilter, setResourceFilter] = useState('All');
-	const [resourceView, setResourceView] = useState('downloads');
-	const [recentSearches, setRecentSearches] = useState(() => {
-		try {
-			return JSON.parse(localStorage.getItem('portal-recent-searches') || '[]');
-		} catch {
-			return [];
-		}
-	});
+	const [resultTypeFilter, setResultTypeFilter] = useState('All');
+	const [showOnlyNextAction, setShowOnlyNextAction] = useState(false);
+	const hasSearchQuery = query.trim().length > 0;
+	const nextActionStageNumber = readNextActionStageNumber();
 
 	const results = useMemo(() => {
 		const normalized = query.toLowerCase();
@@ -28,19 +68,54 @@ export default function Resources() {
 			...journeyStages.map((stage) => ({
 				id: stage.id,
 				type: 'Journey Stage',
+				stageNumber: Number(stage.number),
 				title: `${stage.tenancyLabel}: ${stage.title}`,
-				body: `${stage.tenancyLabel} ${stage.overview} ${stage.requirements.join(' ')}`,
+				body: shortenText(`${stage.tenancyLabel} ${stage.overview}`),
+				actionPath: '/journey',
 			})),
 			...docs.map((document) => ({
 				id: document.id,
 				type: 'Resource',
 				title: document.name,
-				body: `${document.description} ${document.category} ${document.stage}`,
+				body: shortenText(document.description || 'Download the document.'),
+				category: document.category || 'General',
+				stage: document.stage || 'Across all stages',
+				actionPath: document.path || '/contact',
 			})),
 		];
 
-		return items.filter((item) => `${item.title} ${item.body}`.toLowerCase().includes(normalized));
-	}, [docs, query]);
+		if (!hasSearchQuery) {
+			return [];
+		}
+
+		return items
+			.filter((item) => {
+				if (normalized && !`${item.title} ${item.body}`.toLowerCase().includes(normalized)) {
+					return false;
+				}
+
+				if (resultTypeFilter !== 'All' && item.type !== resultTypeFilter) {
+					return false;
+				}
+
+				if (item.type === 'Resource' && resourceFilter !== 'All' && item.category !== resourceFilter) {
+					return false;
+				}
+
+				if (showOnlyNextAction) {
+					if (item.type === 'Journey Stage' && item.stageNumber !== nextActionStageNumber) {
+						return false;
+					}
+
+					if (item.type === 'Resource' && !isDocumentRelevantToStage(item.stage, nextActionStageNumber)) {
+						return false;
+					}
+				}
+
+				return true;
+			})
+			.slice(0, 18);
+	}, [docs, hasSearchQuery, nextActionStageNumber, query, resourceFilter, resultTypeFilter, showOnlyNextAction]);
 
 	useEffect(() => {
 		setDocsLoading(true);
@@ -55,24 +130,7 @@ export default function Resources() {
 			.finally(() => setDocsLoading(false));
 	}, []);
 
-	const saveSearch = () => {
-		if (!query.trim()) {
-			return;
-		}
-
-		const next = [query, ...recentSearches.filter((item) => item !== query)].slice(0, 5);
-		setRecentSearches(next);
-		localStorage.setItem('portal-recent-searches', JSON.stringify(next));
-	};
-
 	const categories = useMemo(() => ['All', ...new Set(docs.map((doc) => doc.category || 'General'))], [docs]);
-	const filteredDocs = useMemo(() => {
-		return docs.filter((doc) => {
-			const matchesFilter = resourceFilter === 'All' || (doc.category || 'General') === resourceFilter;
-			const haystack = `${doc.name} ${doc.description || ''} ${doc.stage || ''}`.toLowerCase();
-			return matchesFilter && haystack.includes(query.toLowerCase());
-		});
-	}, [docs, query, resourceFilter]);
 
 	return (
 		<div className="page-stack">
@@ -80,126 +138,89 @@ export default function Resources() {
 				<div className="section-heading">
 					<div>
 						<p className="eyebrow">Resources</p>
-						<h2>Search, stage references, downloads, and appendices in one place.</h2>
+						<h2>Find the next document or stage action in one search.</h2>
 					</div>
 				</div>
-				<p className="feedback">Search by stage name, tenancy type, document type, or approval topic across the full 13-stage Retail and Office journeys.</p>
-				<div className="toolbar-row">
-					<div className="search-bar grow">
+				<div className="search-bar resources-main-search">
 						<input
 							value={query}
 							onChange={(event) => setQuery(event.target.value)}
-							placeholder="Search stage names, forms, templates, standards, appendices, and portal guidance"
+							placeholder="Search document name, stage, or requirement"
 						/>
-					</div>
-					<label className="filter-control">
-						Category
-						<select value={resourceFilter} onChange={(event) => setResourceFilter(event.target.value)}>
-							{categories.map((category) => (
-								<option key={category} value={category}>{category}</option>
-							))}
-						</select>
-					</label>
-					<button type="button" className="button-link" onClick={saveSearch}>Save Search</button>
 				</div>
-				<div className="chip-row">
-					{suggestedSearches.map((item) => (
-						<button
-							key={item}
-							type="button"
-							className="chip-button"
-							onClick={() => {
-								setQuery(item);
-								setResourceView('results');
-							}}
-						>
-							{item}
-						</button>
-					))}
-				</div>
-				{recentSearches.length > 0 ? (
-					<p className="feedback">Recent searches: {recentSearches.join(' | ')}</p>
-				) : null}
 
-				<div className="interactive-tabs resources-tabs">
-					<div className="tab-list">
-						<button
-							type="button"
-							className={resourceView === 'downloads' ? 'tab active' : 'tab'}
-							onClick={() => setResourceView('downloads')}
-						>
-							Downloads & References
-						</button>
-						<button
-							type="button"
-							className={resourceView === 'results' ? 'tab active' : 'tab'}
-							onClick={() => setResourceView('results')}
-						>
-							Search Results
-						</button>
+				<details className="resources-filter-dropdown">
+					<summary>Filters</summary>
+					<div className="resources-filter-grid">
+						<label className="filter-control">
+							Result Type
+							<select value={resultTypeFilter} onChange={(event) => setResultTypeFilter(event.target.value)}>
+								<option value="All">All</option>
+								<option value="Resource">Resources</option>
+								<option value="Journey Stage">Journey Stages</option>
+							</select>
+						</label>
+						<label className="filter-control">
+							Category
+							<select value={resourceFilter} onChange={(event) => setResourceFilter(event.target.value)}>
+								{categories.map((category) => (
+									<option key={category} value={category}>{category}</option>
+								))}
+							</select>
+						</label>
+						<label className="resources-toggle">
+							<input
+								type="checkbox"
+								checked={showOnlyNextAction}
+								onChange={(event) => setShowOnlyNextAction(event.target.checked)}
+							/>
+							<span>Show only next-action references</span>
+						</label>
 					</div>
+				</details>
 
-					<div className="tab-panel resources-panel">
-						{resourceView === 'downloads' ? (
-							<>
-								<div className="section-heading resources-subsection-heading">
-									<div>
-										<p className="eyebrow">Downloads & References</p>
-										<h3>Central repository for forms, standards, templates, and appendices.</h3>
-									</div>
-								</div>
-
-								{docsLoading ? (
-									<p>Loading documents…</p>
-								) : filteredDocs.length === 0 ? (
-									<p>No documents available. Check back later.</p>
-								) : (
-									<div className="download-grid">
-										{filteredDocs.map((doc) => (
-											<article key={doc.id} className="download-card">
-												<h3>{doc.name}</h3>
-												<p>{doc.description || 'Download the document.'}</p>
-												<div className="resource-meta">
-													<span>{doc.type || 'Reference'}</span>
-													<span>{doc.stage || 'Across all 13 stages'}</span>
-												</div>
-												<p className="muted">Access method: {doc.access || 'Portal document register'}</p>
-											</article>
-										))}
-									</div>
-								)}
-
-								<div className="appendix-panel resources-appendix-panel">
-									<p className="eyebrow">Appendices</p>
-									<div className="chip-row">
-										{appendices.map((item) => (
-											<span key={item} className="info-chip">{item}</span>
-										))}
-									</div>
-								</div>
-							</>
-						) : (
-							<>
-								<div className="section-heading resources-subsection-heading">
-									<div>
-										<p className="eyebrow">Search Results</p>
-										<h3>{results.length} result{results.length === 1 ? '' : 's'} for "{query}"</h3>
-									</div>
-								</div>
-								<div className="stack-list">
-									{results.map((result) => (
-										<article key={result.id} className="search-result-card">
-											<span className="pill">{result.type}</span>
-											<h4>{result.title}</h4>
-											<p>{result.body}</p>
-										</article>
-									))}
-									{results.length === 0 ? <p className="empty-state">No matching references found. Try a broader keyword.</p> : null}
-								</div>
-							</>
-						)}
+				<div className="section-heading resources-subsection-heading">
+					<div>
+						<p className="eyebrow">Search Results</p>
+						<h3>
+							{hasSearchQuery
+								? `${results.length} result${results.length === 1 ? '' : 's'}`
+								: 'Enter a keyword to see relevant results'}
+						</h3>
 					</div>
 				</div>
+
+				{docsLoading ? <p>Loading documents...</p> : null}
+				{hasSearchQuery ? (
+					<div className="resources-results-list">
+						{results.map((result) => (
+							<article key={result.id} className="resource-result-row">
+								<div>
+									<p className="resource-result-type">{result.type}</p>
+									<h4>{result.title}</h4>
+									<p className="single-line">{result.body}</p>
+								</div>
+								<div className="resource-result-actions">
+									{result.type === 'Journey Stage' ? (
+										<Link className="button-link" to={result.actionPath}>Continue</Link>
+									) : result.actionPath === '/contact' ? (
+										<Link className="button-link" to="/contact">Request File</Link>
+									) : (
+										<a className="button-link" href={result.actionPath}>Download</a>
+									)}
+								</div>
+							</article>
+						))}
+						{results.length === 0 ? <p className="empty-state">No matching references found. Try a broader keyword.</p> : null}
+					</div>
+				) : (
+					<div className="resources-empty-state">
+						<p className="empty-state">Start typing a keyword to find relevant stages and resources.</p>
+						<button type="button" className="button-link" onClick={() => setQuery('landlord submission')}>Start With Landlord Submission</button>
+					</div>
+				)}
+
+				<p className="feedback resources-appendix-line">Appendices: {appendices.slice(0, 4).join(' | ')}</p>
 			</section>
 
 			<section className="panel">
@@ -208,11 +229,24 @@ export default function Resources() {
 						<p className="eyebrow">Digital Tenancy Manual</p>
 						<h3>Searchable online manual aligned to the 13-stage tenant journey.</h3>
 					</div>
-					<div className="button-row small-gap">
-						<button type="button" className="button-link" onClick={() => window.print()}>Print / Save as PDF</button>
-					</div>
 				</div>
-
+				<div className="manual-download-card">
+					<div className="manual-info">
+						<p className="eyebrow">Full Manual</p>
+						<h3>Download the complete Digital Tenancy Manual</h3>
+						<p>
+							Includes all 13 Retail and Office journey stages, requirements, standards, and appendices.
+							</p>
+							</div>
+							<a
+							href="/manual.pdf"
+							download="Digital-Tenancy-Manual.pdf"
+							className="download-manual-btn">
+								<svg className="download-btn-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+									<path d="M8 2v7m0 0 3-3m-3 3-3-3M3 12h10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+								</svg>
+								<span>Download PDF</span>
+								</a> </div>
 				<ManualJourneyExplorer />
 			</section>
 

@@ -29,7 +29,42 @@ const iconMap = {
   workplace: OfficeIcon,
 };
 
+const buildWorkspaceStatus = (tenancy, stages, completedStageIds) => {
+  const defaultStage = stages[0] || null;
+  const completedSet = new Set(completedStageIds || []);
+  const firstPendingStage = stages.find((stage) => !completedSet.has(stage.id));
+  const currentStage = firstPendingStage || defaultStage;
+
+  if (!currentStage) {
+    return null;
+  }
+
+  const currentIndex = stages.findIndex((stage) => stage.id === currentStage.id);
+  const nextStage = currentIndex >= 0 && currentIndex < stages.length - 1 ? stages[currentIndex + 1] : null;
+
+  return {
+    tenancy: tenancy?.label || 'Tenant',
+    currentStage: `Stage ${currentStage.number} - ${currentStage.title}`,
+    nextSubmission: nextStage
+      ? (nextStage.deliverables.slice(0, 2).join(' + ') || `${nextStage.title} package`)
+      : 'Final close-out package submitted',
+    deadline: nextStage ? nextStage.deadline : 'Completed',
+    updatedAt: new Date().toISOString(),
+  };
+};
+
 export default function TenancyJourneyExplorer({ eyebrow, title, description }) {
+  const [copyFeedback, setCopyFeedback] = useState('');
+  const [completedStagesByTenancy, setCompletedStagesByTenancy] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('portal-journey-progress') || '{}');
+      return Object.fromEntries(
+        tenancyOptions.map((option) => [option.id, Array.isArray(saved[option.id]) ? saved[option.id] : []])
+      );
+    } catch {
+      return Object.fromEntries(tenancyOptions.map((option) => [option.id, []]));
+    }
+  });
   const [selectedTenancy, setSelectedTenancy] = useState(null);
   const [selectedStageByTenancy, setSelectedStageByTenancy] = useState(() => (
     Object.fromEntries(
@@ -43,6 +78,29 @@ export default function TenancyJourneyExplorer({ eyebrow, title, description }) 
   );
 
   const stages = activeTenancy ? tenancyJourneyMap[activeTenancy.id] : [];
+  const completedStageIds = activeTenancy ? (completedStagesByTenancy[activeTenancy.id] || []) : [];
+
+  const currentStage = useMemo(() => {
+    if (!activeTenancy || stages.length === 0) {
+      return null;
+    }
+
+    return stages.find((stage) => !completedStageIds.includes(stage.id)) || stages[stages.length - 1];
+  }, [activeTenancy, completedStageIds, stages]);
+
+  const nextStage = useMemo(() => {
+    if (!currentStage) {
+      return null;
+    }
+
+    const currentIndex = stages.findIndex((stage) => stage.id === currentStage.id);
+    if (currentIndex < 0 || currentIndex >= stages.length - 1) {
+      return null;
+    }
+
+    return stages[currentIndex + 1];
+  }, [currentStage, stages]);
+
   const activeStage = useMemo(() => {
     if (!activeTenancy) {
       return null;
@@ -62,6 +120,93 @@ export default function TenancyJourneyExplorer({ eyebrow, title, description }) 
     }));
   };
 
+  const syncWorkspaceStatus = (nextProgress) => {
+    if (!activeTenancy || stages.length === 0) {
+      return;
+    }
+
+    const status = buildWorkspaceStatus(activeTenancy, stages, nextProgress);
+    if (!status) {
+      return;
+    }
+
+    localStorage.setItem('portal-workspace-status', JSON.stringify(status));
+    window.dispatchEvent(new Event('portal-workspace-updated'));
+  };
+
+  const updateProgress = (nextProgress) => {
+    if (!activeTenancy) {
+      return;
+    }
+
+    const nextState = {
+      ...completedStagesByTenancy,
+      [activeTenancy.id]: nextProgress,
+    };
+
+    setCompletedStagesByTenancy(nextState);
+    localStorage.setItem('portal-journey-progress', JSON.stringify(nextState));
+    localStorage.setItem('portal-active-tenancy', activeTenancy.id);
+    syncWorkspaceStatus(nextProgress);
+  };
+
+  const handleSetCurrentStage = (stageId) => {
+    if (!activeTenancy) {
+      return;
+    }
+
+    const stageIndex = stages.findIndex((stage) => stage.id === stageId);
+    if (stageIndex < 0) {
+      return;
+    }
+
+    const nextProgress = stages.slice(0, stageIndex).map((stage) => stage.id);
+    updateProgress(nextProgress);
+    handleStageSelect(stageId);
+  };
+
+  const markCurrentStageDone = () => {
+    if (!currentStage || !activeTenancy) {
+      return;
+    }
+
+    const currentIndex = stages.findIndex((stage) => stage.id === currentStage.id);
+    if (currentIndex < 0) {
+      return;
+    }
+
+    const nextProgress = stages.slice(0, currentIndex + 1).map((stage) => stage.id);
+    updateProgress(nextProgress);
+
+    if (currentIndex < stages.length - 1) {
+      handleStageSelect(stages[currentIndex + 1].id);
+    }
+  };
+
+  const copySubmissionChecklist = async () => {
+    if (!activeStage) {
+      return;
+    }
+
+    const checklist = [
+      `${activeStage.number}. ${activeStage.title}`,
+      'Required Deliverables:',
+      ...activeStage.deliverables.map((item) => `- ${item}`),
+      '',
+      'Key Actions:',
+      ...activeStage.actions.map((item) => `- ${item}`),
+    ].join('\n');
+
+    try {
+      await navigator.clipboard.writeText(checklist);
+      setCopyFeedback('Checklist copied');
+    } catch {
+      setCopyFeedback('Unable to copy checklist');
+    }
+
+    setTimeout(() => setCopyFeedback(''), 1800);
+  };
+
   return (
     <section className="panel">
       <div className="section-heading">
@@ -78,7 +223,7 @@ export default function TenancyJourneyExplorer({ eyebrow, title, description }) 
             <div>
               <p className="eyebrow">Selected Path</p>
               <h3>{activeTenancy.journeyTitle}</h3>
-              <p>{activeTenancy.summary}</p>
+              <p className="single-line">{activeTenancy.summary}</p>
             </div>
             <div className="journey-overview-actions">
               <div className="stage-meta">
@@ -96,29 +241,35 @@ export default function TenancyJourneyExplorer({ eyebrow, title, description }) 
           </article>
 
           <div className="journey-explorer-shell">
-            <section className="journey-stage-rail">
-              <div className="journey-stage-rail-header">
-                <p className="eyebrow">Stage List</p>
-                <h4>Progression overview</h4>
+            <article className="journey-progress-summary">
+              <div>
+                <p className="eyebrow">Current Checklist Status</p>
+                <h4>{currentStage ? `${currentStage.number}. ${currentStage.title}` : 'No stage selected yet'}</h4>
+                <p>
+                  {nextStage
+                    ? `Next stage: ${nextStage.number}. ${nextStage.title}`
+                    : 'You have reached the final stage in this journey.'}
+                </p>
               </div>
-
-              <div className="journey-stage-list">
-                {stages.map((stage) => (
+              <div className="button-row small-gap">
+                <button
+                  type="button"
+                  className="button-link button-link-secondary"
+                  onClick={markCurrentStageDone}
+                >
+                  Mark Current Stage Done
+                </button>
+                {nextStage ? (
                   <button
-                    key={stage.id}
                     type="button"
-                    className={activeStage?.id === stage.id ? 'journey-stage-button active' : 'journey-stage-button'}
-                    onClick={() => handleStageSelect(stage.id)}
+                    className="button-link"
+                    onClick={() => handleStageSelect(nextStage.id)}
                   >
-                    <span className="journey-stage-number">{stage.number}</span>
-                    <span className="journey-stage-copy">
-                      <strong>{stage.title}</strong>
-                      <small>{stage.phase}</small>
-                    </span>
+                    Go To Next Stage
                   </button>
-                ))}
+                ) : null}
               </div>
-            </section>
+            </article>
 
             {activeStage ? (
               <article className="journey-spotlight-card">
@@ -126,7 +277,7 @@ export default function TenancyJourneyExplorer({ eyebrow, title, description }) 
                   <div>
                     <p className="eyebrow">Selected Stage</p>
                     <h3>{activeStage.number}. {activeStage.title}</h3>
-                    <p>{activeStage.overview}</p>
+                    <p className="single-line">{activeStage.overview}</p>
                   </div>
                   <div className="stage-meta">
                     <span className="info-chip">{activeStage.phase}</span>
@@ -134,18 +285,16 @@ export default function TenancyJourneyExplorer({ eyebrow, title, description }) 
                   </div>
                 </div>
 
-                <div className="journey-section-grid">
+                <div className="journey-section-grid compact-two-col-grid">
                   <section className="journey-section-card">
-                    <h4>Key Actions</h4>
+                    <h4>Actions & Deliverables</h4>
+                    <p className="eyebrow">Key Actions</p>
                     <ul className="bullet-list">
                       {activeStage.actions.map((item) => (
                         <li key={item}>{item}</li>
                       ))}
                     </ul>
-                  </section>
-
-                  <section className="journey-section-card">
-                    <h4>Required Deliverables</h4>
+                    <p className="eyebrow">Required Deliverables</p>
                     <ul className="bullet-list">
                       {activeStage.deliverables.map((item) => (
                         <li key={item}>{item}</li>
@@ -154,30 +303,69 @@ export default function TenancyJourneyExplorer({ eyebrow, title, description }) 
                   </section>
 
                   <section className="journey-section-card">
-                    <h4>Review Focus</h4>
+                    <h4>Review & References</h4>
+                    <p className="eyebrow">Review Focus</p>
                     <ul className="bullet-list">
                       {activeStage.reviewFocus.map((item) => (
                         <li key={item}>{item}</li>
                       ))}
                     </ul>
+                    <p className="eyebrow">Manual References</p>
+                    <div className="chip-row">
+                      {activeStage.manualSections.map((item) => (
+                        <span key={item} className="info-chip">{item}</span>
+                      ))}
+                    </div>
                   </section>
-                </div>
-
-                <div className="journey-reference-block">
-                  <p className="eyebrow">Manual References</p>
-                  <div className="chip-row">
-                    {activeStage.manualSections.map((item) => (
-                      <span key={item} className="info-chip">{item}</span>
-                    ))}
-                  </div>
                 </div>
 
                 <div className="button-row">
                   <Link className="button-link" to="/resources">Open Resources Hub</Link>
+                  <button type="button" className="button-link button-link-secondary" onClick={copySubmissionChecklist}>Copy Submission Checklist</button>
                   <Link className="button-link button-link-secondary" to="/contact">Ask a Follow-Up Question</Link>
                 </div>
+                {copyFeedback ? <p className="feedback">{copyFeedback}</p> : null}
               </article>
             ) : null}
+
+            <section className="journey-stage-rail">
+              <div className="journey-stage-rail-header">
+                <p className="eyebrow">Progress List</p>
+                <h4>Set your current stage</h4>
+              </div>
+
+              <div className="journey-stage-list">
+                {stages.map((stage) => (
+                  <article
+                    key={stage.id}
+                    className={
+                      currentStage?.id === stage.id
+                        ? 'journey-checklist-item current'
+                        : completedStageIds.includes(stage.id)
+                          ? 'journey-checklist-item complete'
+                          : 'journey-checklist-item faded'
+                    }
+                  >
+                    <span className="journey-stage-status">
+                      {currentStage?.id === stage.id ? 'Current' : completedStageIds.includes(stage.id) ? 'Done' : 'Pending'}
+                    </span>
+                    <button
+                      type="button"
+                      className={activeStage?.id === stage.id ? 'journey-stage-button active' : 'journey-stage-button'}
+                      onClick={() => {
+                        handleSetCurrentStage(stage.id);
+                      }}
+                    >
+                      <span className="journey-stage-number">{stage.number}</span>
+                      <span className="journey-stage-copy">
+                        <strong>{stage.title}</strong>
+                        <small className="single-line">{stage.phase} - {stage.deadline}</small>
+                      </span>
+                    </button>
+                  </article>
+                ))}
+              </div>
+            </section>
           </div>
         </div>
       ) : (
@@ -198,7 +386,20 @@ export default function TenancyJourneyExplorer({ eyebrow, title, description }) 
                   key={option.id}
                   type="button"
                   className="tenancy-selector-card"
-                  onClick={() => setSelectedTenancy(option.id)}
+                  onClick={() => {
+                    setSelectedTenancy(option.id);
+
+                    const selectedOption = tenancyOptions.find((item) => item.id === option.id);
+                    const optionStages = tenancyJourneyMap[option.id] || [];
+                    const savedProgress = completedStagesByTenancy[option.id] || [];
+                    const status = buildWorkspaceStatus(selectedOption, optionStages, savedProgress);
+
+                    if (status) {
+                      localStorage.setItem('portal-active-tenancy', option.id);
+                      localStorage.setItem('portal-workspace-status', JSON.stringify(status));
+                      window.dispatchEvent(new Event('portal-workspace-updated'));
+                    }
+                  }}
                 >
                   <span className="tenancy-selector-icon">
                     <Icon />
